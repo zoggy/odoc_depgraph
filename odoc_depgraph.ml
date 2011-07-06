@@ -42,6 +42,18 @@ let bs = Buffer.add_string
 let default_dot_ppi = 72.0
 let p_dbg s = ();;
 
+(*c==v=[String.no_blanks]=1.0====*)
+let no_blanks s =
+  let len = String.length s in
+  let buf = Buffer.create len in
+  for i = 0 to len - 1 do
+    match s.[i] with
+      ' ' | '\n' | '\t' | '\r' -> ()
+    | c -> Buffer.add_char buf c
+  done;
+  Buffer.contents buf
+(*/c==v=[String.no_blanks]=1.0====*)
+
 (*c==v=[String.split_string]=1.0====*)
 let split_string s chars =
   let len = String.length s in
@@ -182,7 +194,7 @@ class gen () =
   object (self)
     inherit Odoc_html.html as html
 
-    method gen_dot_file modules =
+    method gen_dot_file ?width ?height modules =
       Odoc_info.Dep.kernel_deps_of_modules modules;
       let out_file_bak = !Odoc_info.Args.out_file in
       let dot_file = Filename.temp_file "odoc_gi" ".dot" in
@@ -191,8 +203,17 @@ class gen () =
       let dot_gen = new dot in
       dot_gen#generate modules;
       Odoc_info.Args.out_file := out_file_bak;
-      let com = Printf.sprintf "dot -s72 %s > %s"
+      let graph_size_flags =
+        match width, height with
+          None, _ | _, None -> ""
+        | Some w, Some h ->
+            Printf.sprintf "-Gsize=%f,%f"
+             (w /. default_dot_ppi)
+              (h /. default_dot_ppi)
+      in
+      let com = Printf.sprintf "dot -s72 %s %s > %s"
         (Filename.quote dot_file)
+        graph_size_flags
         (Filename.quote dot_file2)
       in
       match Sys.command com with
@@ -202,10 +223,13 @@ class gen () =
           Sys.remove dot_file;
           dot_file2
 
+    val mutable png_file_counter = 0
     method gen_png_file dot_file =
       let png_file = Filename.concat
-        !Odoc_info.Args.target_dir "index.png"
+        !Odoc_info.Args.target_dir
+        (Printf.sprintf "_map%d.png" png_file_counter)
       in
+      png_file_counter <- png_file_counter + 1;
       let com = Printf.sprintf "dot -Grotate=0 -Tpng -o %s %s"
         (Filename.quote png_file) (Filename.quote dot_file)
       in
@@ -217,10 +241,15 @@ class gen () =
     method get_dot_info dot_file =
       analyse_annot_dot_file dot_file
 
-    method gen_map b map_name (_,y,items) =
+    method gen_map b ~x_factor ~y_factor map_name (_,y,items) =
       bp b "<map id=\"%s\" name=\"%s\">\n" map_name map_name;
+      let y = y *. y_factor in
       List.iter
         (fun (x1,y1,x2,y2,id) ->
+           let (x1,y1,x2,y2) =
+             (x1 *. x_factor, y1 *. y_factor,
+              x2 *. x_factor, y2 *. y_factor)
+           in
            let (html_file, _) = Naming.html_files id in
            bp b "<area shape=\"rect\" id=\"%s\" href=\"%s\" title=\"%s\" alt=\"\" coords=\"%d,%d,%d,%d\"/>\n"
              id (Filename.basename html_file) id
@@ -229,31 +258,98 @@ class gen () =
         items;
       bs b "</map>\n"
 
-    method gen_index_file info png_file =
+    method gen_image_and_map b ?width ?height ?zoom modules =
+      let dot_file = self#gen_dot_file ?width ?height modules in
+      let png_file = self#gen_png_file dot_file in
+      let info = self#get_dot_info dot_file in
+      Sys.remove dot_file;
+      let map_name = Printf.sprintf "%s_"
+        (Filename.chop_extension (Filename.basename png_file))
+      in
+      let (w, h, _) = info in
+      let x_factor =
+        match zoom, width with
+          None, None -> 1.
+        | None, Some w2 -> w2 /. w
+        | Some z, _ -> z
+      in
+      let y_factor =
+        match zoom, height with
+          None, None -> 1.
+        | None, Some h2 -> h2 /. h
+        | Some z, _ -> z
+      in
+      bp b "<img class=\"depgraph\" src=\"%s\" usemap=\"#%s\" width=\"%d\" height=\"%d\"/><br/>\n"
+        (Filename.basename png_file) map_name
+        (int_of_float (w*.x_factor)) (int_of_float (h*.y_factor));
+      self#gen_map b ~x_factor ~y_factor map_name info
+
+    method html_of_modgraph b t =
+      let get_modules s =
+        let names = List.map no_blanks (split_string s [' '; ',']) in
+        List.filter
+          (fun m -> List.mem m.m_name names)
+          list_modules
+      in
+      let get_atts s =
+        List.fold_left
+          (fun acc s ->
+             match split_string s [' '; '='] with
+               s1 :: s2 :: _ -> (s1, s2) :: acc
+             | _ -> acc
+          )
+          []
+          (split_string s [','])
+      in
+      let get_float_att name atts =
+        try
+          Some (float_of_string (List.assoc name atts))
+        with Not_found -> None
+      in
+      match t with
+        [] -> ()
+      | [Raw s] -> self#gen_image_and_map b (get_modules s)
+      | [Code code ; Raw s] ->
+          let atts = get_atts code in
+          let width = get_float_att "width" atts
+          and height = get_float_att "height" atts
+          and zoom = get_float_att "zoom" atts in
+          self#gen_image_and_map b
+           ?width ?height ?zoom (get_modules s)
+      | _ -> failwith "Bad syntax in {modgraph"
+
+    method html_of_custom_text b s t =
+      match s with
+        "modgraph" -> self#html_of_modgraph b t
+      | _ -> html#html_of_custom_text b s t
+
+    method generate_index modules =
       let b = Buffer.create 1024 in
+      let title = match !Args.title with None -> "" | Some t -> self#escape t in
       bs b doctype ;
       bs b "<html>\n";
       self#print_header b self#title;
       bs b "<body>\n";
       bs b "<center><h1>";
-      bs b self#title;
-      bs b "</h1></center>\n<br>\n";
-      let map_name = Printf.sprintf "_map%s_" (Filename.basename png_file) in
-      let (w, h, _) = info in
-      bp b "<center><img class=\"depgraph\" src=\"%s\" usemap=\"#%s\" width=\"%d\" height=\"%d\"/><br/></center>"
-        (Filename.basename png_file) map_name (int_of_float w) (int_of_float h);
-      self#gen_map b map_name info;
+      bs b title;
+      bs b "</h1></center>\n";
+      let info = Odoc_info.apply_opt
+            (Odoc_info.info_of_comment_file modules)
+            !Odoc_info.Args.intro_file
+      in
+      (
+       match info with
+         None ->
+           self#html_of_Index_list b;
+           bs b "<br/><center>";
+           self#gen_image_and_map b modules;
+           bs b "</center>"
+       | Some i -> self#html_of_info ~indent: false b info
+      );
       bs b "</body></html>";
-      let chanout = open_out (Filename.concat !Args.target_dir "index.html") in
+      let chanout = open_out (Filename.concat !Args.target_dir self#index) in
       Buffer.output_buffer chanout b;
       close_out chanout
-
-    method generate modules =
-      html#generate modules;
-      let dot_file = self#gen_dot_file modules in
-      let png_file = self#gen_png_file dot_file in
-      let info = self#get_dot_info dot_file in
-      self#gen_index_file info png_file
 
     initializer
       default_style_options <-

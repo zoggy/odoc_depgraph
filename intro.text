@@ -1,0 +1,11 @@
+Here is the dependency graph of modules:
+
+{modgraph M1 M2 M3 M4}
+
+And here with only three modules, with specified width and height:
+
+{modgraph[width=200, height=200] M1 M3 M4}
+
+And here also with three modules, with specified zoom:
+
+{modgraph[zoom=0.6] M3 M2 M4}

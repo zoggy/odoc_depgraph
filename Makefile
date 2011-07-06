@@ -60,6 +60,11 @@ test: dummy
 	(cd test ; ocamlc -c m3.ml m2.ml m4.ml m1.ml ; \
 	$(OCAMLDOCOPT) -t "Odoc_depgraph test" -g ../$(CMXS) -d ocamldoc *.ml)
 
+test2: dummy
+	mkdir -p test/ocamldoc
+	(cd test ; ocamlc -c m3.ml m2.ml m4.ml m1.ml ; \
+	$(OCAMLDOCOPT) -intro ../intro.text -t "Odoc_depgraph test" -g ../$(CMXS) -d ocamldoc *.ml)
+
 testopt:
 	$(OCAMLDOCOPT) -t "Kmedian test doc" -g $(CMXS) -d /tmp/ -I ../kmedian ../kmedian/*.ml
 
