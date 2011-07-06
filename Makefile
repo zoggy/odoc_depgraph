@@ -27,6 +27,9 @@ odoc_depgraph.cmo: odoc_depgraph.ml
 odoc_depgraph.cmx: odoc_depgraph.ml
 	$(OCAMLOPT) -c $(COMPFLAGS) $<
 
+install:byte opt
+	cp -f $(CMA) $(CMXS) `ocamldoc -customdir`/
+
 test:
 	$(OCAMLDOC) -t "Kmedian test doc" -g $(CMA) -d /tmp/ -I ../kmedian ../kmedian/*.ml
 
