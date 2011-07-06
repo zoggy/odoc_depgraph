@@ -1,0 +1,39 @@
+Odoc_depgraph is an ocamldoc custom html generator allowing to insert
+module dependency graphs in html pages. The graphs are images with
+associated maps so that you can click on a module name to jump
+to its documentation.
+
+=== Pre-requisites
+Odot must be installed:
+  http://home.gna.org/cameleon/odot.en.html
+(alone or with cameleon2)
+
+=== Compilation
+# make
+# make install
+  This will install the ocamldoc plugins in the ocamldoc custom generator
+  directory (obtained with ocamldoc -customdir).
+
+=== Usage
+As other ocamldoc custom generators, use the -g option of ocamldoc
+to use the generator:
+  ocamldoc -g odoc_depgraph.cma ....
+or
+  ocamldoc.opt -g odoc_depgraph.cmxs ...
+
+See the "test" and "test2" targets in Makefile, which use the
+test/*.ml files to generate some doc.
+
+The custom generator introduces a new notation to insert
+module dependency graphs in ocamldoc comments:
+  {modgraph Module1 Module2 Module3 ...}
+or
+  {modgraph[attributes] Module1 Module2 Module3 ...}
+
+Attributes are of the form
+  key=value, key=value, ...
+
+Supported keys are by now "width", "height" and "zoom" with
+a float as value.
+
+See file intro.text for an example of usage.
