@@ -58,7 +58,8 @@ install:byte opt
 test: dummy
 	mkdir -p test/ocamldoc
 	(cd test ; ocamlc -c m3.ml m2.ml m4.ml m1.ml ; \
-	$(OCAMLDOCOPT) -t "Odoc_depgraph test" -g ../$(CMXS) -d ocamldoc *.ml)
+	$(OCAMLDOCOPT) -t "Odoc_depgraph test" -g ../$(CMXS) \
+	-width 300 -height 400 -d ocamldoc *.ml)
 
 test2: dummy
 	mkdir -p test/ocamldoc

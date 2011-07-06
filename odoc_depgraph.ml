@@ -190,6 +190,23 @@ class dot =
   end
 ;;
 
+let width = ref None;;
+let height = ref None;;
+let zoom = ref None;;
+
+let () = Odoc_info.Args.add_option
+  ("-width", Arg.Float (fun f -> width := Some f),
+  "<float> set width for module graph on index page")
+;;
+let () = Odoc_info.Args.add_option
+  ("-height", Arg.Float (fun f -> height := Some f),
+  "<float> set height for module graph on index page")
+;;
+let () = Odoc_info.Args.add_option
+  ("-zoom", Arg.Float (fun f -> zoom := Some f),
+  "<float> set zoom for module graph on index page")
+;;
+
 class gen () =
   object (self)
     inherit Odoc_html.html as html
@@ -342,7 +359,9 @@ class gen () =
          None ->
            self#html_of_Index_list b;
            bs b "<br/><center>";
-           self#gen_image_and_map b modules;
+           self#gen_image_and_map
+             ?width: !width ?height: !height ?zoom: !zoom
+             b modules;
            bs b "</center>"
        | Some i -> self#html_of_info ~indent: false b info
       );
