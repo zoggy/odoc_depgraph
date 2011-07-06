@@ -1,0 +1,7 @@
+- option -zoom to zoom image size and coordinates, so that
+  big pictures cat fit in a page
+- make the generator adds a tag to be able to insert such
+  a graph for a list of modules (like {!modules: })
+- choose a better style
+- handle some ocamldoc tags associated to modules, to be
+  able to change the style for each module
