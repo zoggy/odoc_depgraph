@@ -84,7 +84,7 @@ let get_graph_bounding_box stmt_list =
           Some (Odot.Simple_id v)
         | Some (Odot.Double_quoted_id v) ->
             begin
-              match split_string v [','] with
+              match split_string v ['\n'; ','] with
                 [x1;y1;x2;y2] ->
                   (
                    let (a,b,c,d) =
@@ -142,7 +142,7 @@ let analyse_annot_dot_file f =
                   | Some (Odot.Simple_id v)
                   | Some (Odot.Double_quoted_id v) ->
                       begin
-                        match split_string v [','] with
+                        match split_string v ['\n'; ','] with
                           [x;y] ->
                             (
                              try (float_of_string x, float_of_string y)
@@ -303,7 +303,7 @@ class gen () =
 
     method html_of_modgraph b t =
       let get_modules s =
-        let names = List.map no_blanks (split_string s [' '; ',']) in
+        let names = List.map no_blanks (split_string s ['\n'; '\t' ; ' '; ',']) in
         List.filter
           (fun m -> List.mem m.m_name names)
           list_modules
@@ -316,7 +316,7 @@ class gen () =
              | _ -> acc
           )
           []
-          (split_string s [','])
+          (split_string s ['\n' ; ','])
       in
       let get_float_att name atts =
         try
