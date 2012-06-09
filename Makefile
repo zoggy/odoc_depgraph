@@ -29,11 +29,12 @@ CMA=odoc_depgraph.cma
 CMXS=$(CMA:.cma=.cmxs)
 
 OCAMLOPT=ocamlopt
+OCAMLFIND=ocamlfind
 OCAMLC=ocamlc
 OCAMLDOC=ocamldoc
 OCAMLDOCOPT=ocamldoc.opt
 
-COMPFLAGS=-annot -I +ocamldoc -I +cameleon2
+COMPFLAGS=-annot -I +ocamldoc `ocamlfind query -i-format dot`
 
 all: byte opt
 

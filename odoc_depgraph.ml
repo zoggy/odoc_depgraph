@@ -181,7 +181,7 @@ let analyse_annot_dot_file f =
 
 class dot =
   object(self)
-    inherit Odoc_dot.dot as dot
+    inherit Odoc_dot.Generator.dot as dot
 
      method! print_module_atts fmt m =
       Format.fprintf fmt
@@ -194,32 +194,34 @@ let width = ref None;;
 let height = ref None;;
 let zoom = ref None;;
 
-let () = Odoc_info.Args.add_option
+let () = Odoc_args.add_option
   ("-width", Arg.Float (fun f -> width := Some f),
   "<float> set width for module graph on index page")
 ;;
-let () = Odoc_info.Args.add_option
+let () = Odoc_args.add_option
   ("-height", Arg.Float (fun f -> height := Some f),
   "<float> set height for module graph on index page")
 ;;
-let () = Odoc_info.Args.add_option
+let () = Odoc_args.add_option
   ("-zoom", Arg.Float (fun f -> zoom := Some f),
   "<float> set zoom for module graph on index page")
 ;;
 
-class gen () =
-  object (self)
-    inherit Odoc_html.html as html
+module Generator (G : Odoc_html.Html_generator) =
+struct
+ class html =
+    object(self)
+      inherit G.html as html
 
-    method gen_dot_file ?width ?height modules =
+    method private gen_dot_file ?width ?height modules =
       Odoc_info.Dep.kernel_deps_of_modules modules;
-      let out_file_bak = !Odoc_info.Args.out_file in
+      let out_file_bak = !Odoc_global.out_file in
       let dot_file = Filename.temp_file "odoc_gi" ".dot" in
       let dot_file2 = Filename.temp_file "odoc_gi" ".dot" in
-      Odoc_info.Args.out_file := dot_file;
+      Odoc_global.out_file := dot_file;
       let dot_gen = new dot in
       dot_gen#generate modules;
-      Odoc_info.Args.out_file := out_file_bak;
+      Odoc_global.out_file := out_file_bak;
       let graph_size_flags =
         match width, height with
           None, _ | _, None -> ""
@@ -241,9 +243,9 @@ class gen () =
           dot_file2
 
     val mutable png_file_counter = 0
-    method gen_png_file dot_file =
+    method private gen_png_file dot_file =
       let png_file = Filename.concat
-        !Odoc_info.Args.target_dir
+        !Odoc_global.target_dir
         (Printf.sprintf "_map%d.png" png_file_counter)
       in
       png_file_counter <- png_file_counter + 1;
@@ -255,10 +257,10 @@ class gen () =
           failwith (Printf.sprintf "Command failed: %s" com)
       | _ -> png_file
 
-    method get_dot_info dot_file =
+    method private get_dot_info dot_file =
       analyse_annot_dot_file dot_file
 
-    method gen_map b ~x_factor ~y_factor map_name (_,y,items) =
+    method private gen_map b ~x_factor ~y_factor map_name (_,y,items) =
       bp b "<map id=\"%s\" name=\"%s\">\n" map_name map_name;
       let y = y *. y_factor in
       List.iter
@@ -275,7 +277,7 @@ class gen () =
         items;
       bs b "</map>\n"
 
-    method gen_image_and_map b ?width ?height ?zoom modules =
+    method private gen_image_and_map b ?width ?height ?zoom modules =
       let dot_file = self#gen_dot_file ?width ?height modules in
       let png_file = self#gen_png_file dot_file in
       let info = self#get_dot_info dot_file in
@@ -301,7 +303,7 @@ class gen () =
         (int_of_float (w*.x_factor)) (int_of_float (h*.y_factor));
       self#gen_map b ~x_factor ~y_factor map_name info
 
-    method html_of_modgraph b t =
+    method private html_of_modgraph b t =
       let get_modules s =
         let names = List.map no_blanks (split_string s ['\n'; '\t' ; ' '; ',']) in
         List.filter
@@ -342,7 +344,7 @@ class gen () =
 
     method generate_index modules =
       let b = Buffer.create 1024 in
-      let title = match !Args.title with None -> "" | Some t -> self#escape t in
+      let title = match !Odoc_global.title with None -> "" | Some t -> self#escape t in
       bs b doctype ;
       bs b "<html>\n";
       self#print_header b self#title;
@@ -352,7 +354,7 @@ class gen () =
       bs b "</h1></center>\n";
       let info = Odoc_info.apply_opt
             (Odoc_info.info_of_comment_file modules)
-            !Odoc_info.Args.intro_file
+            !Odoc_global.intro_file
       in
       (
        match info with
@@ -366,7 +368,7 @@ class gen () =
        | Some i -> self#html_of_info ~indent: false b info
       );
       bs b "</body></html>";
-      let chanout = open_out (Filename.concat !Args.target_dir self#index) in
+      let chanout = open_out (Filename.concat !Odoc_global.target_dir self#index) in
       Buffer.output_buffer chanout b;
       close_out chanout
 
@@ -375,7 +377,6 @@ class gen () =
         "img.depgraph { border-width: 0px; }" ::
         default_style_options
   end
+end
 
-let generator = ((new gen ()) :> Odoc_args.doc_generator)
-
-let _ = Odoc_args.set_doc_generator (Some generator)
+let _ = Odoc_args.extend_html_generator (module Generator : Odoc_gen.Html_functor);;
