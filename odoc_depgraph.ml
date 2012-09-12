@@ -73,138 +73,78 @@ let split_string s chars =
   iter "" 0
 (*/c==v=[String.split_string]=1.0====*)
 
-let get_graph_bounding_box stmt_list =
-  let rec iter = function
-    [] ->
-      p_dbg "bing!";
-      raise Not_found
-  | (Odot.Stmt_attr (Odot.Attr_graph attr_list)) :: q ->
-      begin
-        match Odot.attr_value (Odot.Simple_id "bb") attr_list with
-          Some (Odot.Simple_id v)
-        | Some (Odot.Double_quoted_id v) ->
-            begin
-              match split_string v ['\n'; ','] with
-                [x1;y1;x2;y2] ->
-                  (
-                   let (a,b,c,d) =
-                     try (float_of_string x1, float_of_string y1,
-                        float_of_string x2, float_of_string y2)
-                     with
-                     | _ -> raise Not_found
-                   in
-                   match a,b,c,d with
-                     0., _, _, 0. -> (0.,0.,c,b)
-                   | _ as x -> x
-                  )
-              | _ ->
-                  prerr_endline "bouh!";
-                  raise Not_found
-            end
-        | _ -> iter q
-      end
-  | _ :: q -> iter q
+(*c==v=[File.string_of_file]=1.0====*)
+let string_of_file name =
+  let chanin = open_in_bin name in
+  let len = 1024 in
+  let s = String.create len in
+  let buf = Buffer.create len in
+  let rec iter () =
+    try
+      let n = input chanin s 0 len in
+      if n = 0 then
+        ()
+      else
+        (
+         Buffer.add_substring buf s 0 n;
+         iter ()
+        )
+    with
+      End_of_file -> ()
   in
-  iter stmt_list
-;;
+  iter ();
+  close_in chanin;
+  Buffer.contents buf
+(*/c==v=[File.string_of_file]=1.0====*)
 
-let analyse_annot_dot_file f =
-  try
-    let graph = Odot.parse_file f in
-    let (_,_,width,height) = get_graph_bounding_box graph.Odot.stmt_list in
-    p_dbg (Printf.sprintf "width=%f,height=%f" width height);
-    let rec iter acc = function
-      [] -> acc
-    |	stmt :: q ->
-        match stmt with
-          Odot.Stmt_node (node_id,attr_list) ->
-            p_dbg "Stmt_node";
-            begin
-              try
-                let w =
-                  match Odot.attr_value (Odot.Simple_id "width") attr_list with
-                  | Some (Odot.Simple_id v)
-                  | Some (Odot.Double_quoted_id v) ->
-                      (try float_of_string v
-                       with _ -> raise Not_found)
-                  | _ -> raise Not_found
-                in
-                let h =
-                  match Odot.attr_value (Odot.Simple_id "height") attr_list with
-                  | Some (Odot.Simple_id v)
-                  | Some (Odot.Double_quoted_id v) ->
-                      (try float_of_string v
-                       with _ -> raise Not_found)
-                  | _ -> raise Not_found
-                in
-                let (x,y) =
-                  match Odot.attr_value (Odot.Simple_id "pos") attr_list with
-                  | Some (Odot.Simple_id v)
-                  | Some (Odot.Double_quoted_id v) ->
-                      begin
-                        match split_string v ['\n'; ','] with
-                          [x;y] ->
-                            (
-                             try (float_of_string x, float_of_string y)
-                             with | _ -> raise Not_found
-                            )
-                        | _ -> raise Not_found
-                      end
-                  | _ -> raise Not_found
-                in
-                let w = w *. default_dot_ppi in
-                let h = h *. default_dot_ppi in
-                let x1 = x -. w /. 2.0 in
-                let y1 = y -. h /. 2.0 in
-                let x2 = x +. w /. 2.0 in
-                let y2 = y +. h /. 2.0 in
-                let s_id = Odot.string_of_node_id node_id in
-                p_dbg (Printf.sprintf "id %s: x1=%f y1=%f x2=%f y2=%f"
-                 s_id x1 y1 x2 y2);
-                iter ((x1,y1,x2,y2,s_id)::acc) q
-              with
-                Not_found ->
-                prerr_endline (Printf.sprintf "Not_found: %s" (Odot.string_of_node_id node_id));
-                  iter acc q
-            end
-        | Odot.Stmt_subgraph g ->
-            iter acc (g.Odot.sub_stmt_list @ q)
-        | Odot.Stmt_equals _
-        | Odot.Stmt_edge _
-        | Odot.Stmt_attr _ -> iter acc q
-    in
-    (width, height, iter [] graph.Odot.stmt_list)
-  with
-    e ->
-      p_dbg (Printexc.to_string e);
-      (1., 1., [])
+let dot_to_svg ?(options="") ?size dot =
+  let temp_file = Filename.temp_file "odoc_gi" "svg" in
+  let com = Printf.sprintf "echo %s |dot %s -Tsvg | tail --lines=+%d > %s"
+    (Filename.quote dot) options
+    (match size with None -> 7 | Some _ -> 9)
+    (Filename.quote temp_file)
+  in
+  match Sys.command com with
+    0 ->
+      let svg = string_of_file temp_file in
+      Sys.remove temp_file;
+      let svg =
+        match size with
+          None -> svg
+        | Some (w,h) ->
+          Printf.sprintf "<svg width=\"%d\" height=\"%d\" viewBox=\"0.0 0.0 %d.00 %d.00\"\n
+          xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n%s"
+            w h w h svg
+      in
+      svg
+  | n ->
+      let msg = Printf.sprintf "Execution failed (%d): %s" n com in
+      failwith msg
+;;
 
 class dot =
   object(self)
     inherit Odoc_dot.Generator.dot as dot
 
      method! print_module_atts fmt m =
+      let (html_file, _) = Naming.html_files m.m_name in
       Format.fprintf fmt
-        "\"%s\" [style=\"rounded,filled\", shape=rect, color=red, fillcolor=grey, fontcolor=black];\n" m.Module.m_name
+        "\"%s\" [href=\"%s\", style=\"rounded,filled\", shape=rect, color=red, fillcolor=lightgrey, fontcolor=black];\n"
+      m.Module.m_name html_file
 
   end
 ;;
 
-let width = ref None;;
-let height = ref None;;
-let zoom = ref None;;
+let width = ref 600;;
+let height = ref 300;;
 
 let () = Odoc_args.add_option
-  ("-width", Arg.Float (fun f -> width := Some f),
-  "<float> set width for module graph on index page")
+  ("-width", Arg.Int (fun n -> width := n),
+  "<n> set width for module graph on index page")
 ;;
 let () = Odoc_args.add_option
-  ("-height", Arg.Float (fun f -> height := Some f),
-  "<float> set height for module graph on index page")
-;;
-let () = Odoc_args.add_option
-  ("-zoom", Arg.Float (fun f -> zoom := Some f),
-  "<float> set zoom for module graph on index page")
+  ("-height", Arg.Int (fun n -> height := n),
+  "<n> set height for module graph on index page")
 ;;
 
 module Generator (G : Odoc_html.Html_generator) =
@@ -213,16 +153,16 @@ struct
     object(self)
       inherit G.html as html
 
-    method private gen_dot_file ?width ?height modules =
+    val mutable top_modules = []
+    method private gen_dot ?width ?height modules =
       Odoc_info.Dep.kernel_deps_of_modules modules;
       let out_file_bak = !Odoc_global.out_file in
       let dot_file = Filename.temp_file "odoc_gi" ".dot" in
-      let dot_file2 = Filename.temp_file "odoc_gi" ".dot" in
       Odoc_global.out_file := dot_file;
       let dot_gen = new dot in
       dot_gen#generate modules;
       Odoc_global.out_file := out_file_bak;
-      let graph_size_flags =
+(*      let graph_size_flags =
         match width, height with
           None, _ | _, None -> ""
         | Some w, Some h ->
@@ -230,85 +170,30 @@ struct
              (w /. default_dot_ppi)
               (h /. default_dot_ppi)
       in
-      let com = Printf.sprintf "dot -s72 %s %s > %s"
-        (Filename.quote dot_file)
-        graph_size_flags
-        (Filename.quote dot_file2)
-      in
-      match Sys.command com with
-        n when n <> 0 ->
-          failwith (Printf.sprintf "Command failed: %s" com)
-      | _ ->
-          Sys.remove dot_file;
-          dot_file2
+             *)
+       let dot = string_of_file dot_file in
+       Sys.remove dot_file;
+       dot
 
-    val mutable png_file_counter = 0
-    method private gen_png_file dot_file =
-      let png_file = Filename.concat
-        !Odoc_global.target_dir
-        (Printf.sprintf "_map%d.png" png_file_counter)
+    method private gen_image b ?(width= !width) ?(height= !height) modules =
+      let dot = self#gen_dot ~width ~height modules in
+      let size = (width, height) in
+      let options =
+          Printf.sprintf "-Gsize=%f,%f -Grotate=0"
+            (float width /. default_dot_ppi)
+            (float height /. default_dot_ppi)
       in
-      png_file_counter <- png_file_counter + 1;
-      let com = Printf.sprintf "dot -Grotate=0 -Tpng -o %s %s"
-        (Filename.quote png_file) (Filename.quote dot_file)
-      in
-      match Sys.command com with
-        n when n <> 0 ->
-          failwith (Printf.sprintf "Command failed: %s" com)
-      | _ -> png_file
-
-    method private get_dot_info dot_file =
-      analyse_annot_dot_file dot_file
-
-    method private gen_map b ~x_factor ~y_factor map_name (_,y,items) =
-      bp b "<map id=\"%s\" name=\"%s\">\n" map_name map_name;
-      let y = y *. y_factor in
-      List.iter
-        (fun (x1,y1,x2,y2,id) ->
-           let (x1,y1,x2,y2) =
-             (x1 *. x_factor, y1 *. y_factor,
-              x2 *. x_factor, y2 *. y_factor)
-           in
-           let (html_file, _) = Naming.html_files id in
-           bp b "<area shape=\"rect\" id=\"%s\" href=\"%s\" title=\"%s\" alt=\"\" coords=\"%d,%d,%d,%d\"/>\n"
-             id (Filename.basename html_file) id
-             (int_of_float x1) (int_of_float (y-.y1)) (int_of_float x2) (int_of_float (y-.y2))
-        )
-        items;
-      bs b "</map>\n"
-
-    method private gen_image_and_map b ?width ?height ?zoom modules =
-      let dot_file = self#gen_dot_file ?width ?height modules in
-      let png_file = self#gen_png_file dot_file in
-      let info = self#get_dot_info dot_file in
-      Sys.remove dot_file;
-      let map_name = Printf.sprintf "%s_"
-        (Filename.chop_extension (Filename.basename png_file))
-      in
-      let (w, h, _) = info in
-      let x_factor =
-        match zoom, width with
-          None, None -> 1.
-        | None, Some w2 -> w2 /. w
-        | Some z, _ -> z
-      in
-      let y_factor =
-        match zoom, height with
-          None, None -> 1.
-        | None, Some h2 -> h2 /. h
-        | Some z, _ -> z
-      in
-      bp b "<img class=\"depgraph\" src=\"%s\" usemap=\"#%s\" width=\"%d\" height=\"%d\"/><br/>\n"
-        (Filename.basename png_file) map_name
-        (int_of_float (w*.x_factor)) (int_of_float (h*.y_factor));
-      self#gen_map b ~x_factor ~y_factor map_name info
+      let svg = dot_to_svg ~options ~size dot in
+      (*Sys.remove dot_file;*)
+      bp b "<div class=\"depgraph\">%s</div>" svg
 
     method private html_of_modgraph b t =
       let get_modules s =
         let names = List.map no_blanks (split_string s ['\n'; '\t' ; ' '; ',']) in
-        List.filter
-          (fun m -> List.mem m.m_name names)
-          list_modules
+        match names with
+          [] -> top_modules
+        | _ ->
+          List.filter (fun m -> List.mem m.m_name names) list_modules
       in
       let get_atts s =
         List.fold_left
@@ -320,21 +205,19 @@ struct
           []
           (split_string s ['\n' ; ','])
       in
-      let get_float_att name atts =
+      let get_int_att name atts =
         try
-          Some (float_of_string (List.assoc name atts))
+          Some (int_of_string (List.assoc name atts))
         with Not_found -> None
       in
       match t with
         [] -> ()
-      | [Raw s] -> self#gen_image_and_map b (get_modules s)
+      | [Raw s] -> self#gen_image b (get_modules s)
       | [Code code ; Raw s] ->
           let atts = get_atts code in
-          let width = get_float_att "width" atts
-          and height = get_float_att "height" atts
-          and zoom = get_float_att "zoom" atts in
-          self#gen_image_and_map b
-           ?width ?height ?zoom (get_modules s)
+          let width = get_int_att "width" atts
+          and height = get_int_att "height" atts in
+          self#gen_image b ?width ?height (get_modules s)
       | _ -> failwith "Bad syntax in {modgraph"
 
     method html_of_custom_text b s t =
@@ -343,6 +226,7 @@ struct
       | _ -> html#html_of_custom_text b s t
 
     method generate_index modules =
+      top_modules <- modules ;
       let b = Buffer.create 1024 in
       let title = match !Odoc_global.title with None -> "" | Some t -> self#escape t in
       bs b doctype ;
@@ -361,9 +245,7 @@ struct
          None ->
            self#html_of_Index_list b;
            bs b "<br/><center>";
-           self#gen_image_and_map
-             ?width: !width ?height: !height ?zoom: !zoom
-             b modules;
+           self#gen_image ~width: !height ~height: !height b modules;
            bs b "</center>"
        | Some i -> self#html_of_info ~indent: false b info
       );
