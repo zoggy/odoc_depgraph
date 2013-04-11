@@ -1,0 +1,3 @@
+next release:
+- by default, dep graph are not simplified; use -dot-reduce
+  to use the transitive kernel to get the previous behaviour

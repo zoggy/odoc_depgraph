@@ -155,7 +155,8 @@ struct
 
     val mutable top_modules = []
     method private gen_dot ?width ?height modules =
-      Odoc_info.Dep.kernel_deps_of_modules modules;
+      if !Odoc_dot.dot_reduce then
+        Odoc_info.Dep.kernel_deps_of_modules modules;
       let out_file_bak = !Odoc_global.out_file in
       let dot_file = Filename.temp_file "odoc_gi" ".dot" in
       Odoc_global.out_file := dot_file;
