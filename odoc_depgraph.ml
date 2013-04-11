@@ -129,9 +129,18 @@ class dot =
      method! print_module_atts fmt m =
       let (html_file, _) = Naming.html_files m.m_name in
       Format.fprintf fmt
-        "\"%s\" [href=\"%s\", style=\"rounded,filled\", shape=rect, color=red, fillcolor=lightgrey, fontcolor=black];\n"
-      m.Module.m_name html_file
-
+        "\"%s\" [href=%S, tooltip=%S, style=\"rounded,filled\", shape=rect, color=red, fillcolor=lightgrey, fontcolor=black];\n"
+        m.Module.m_name
+       html_file
+        (match m.Module.m_info with
+           None -> m.Module.m_name
+         | Some i ->
+             match i.Odoc_info.i_desc with
+             | None -> m.Module.m_name
+             | Some t ->
+                 let s = Odoc_info.first_sentence_of_text t in
+                 Odoc_text.Texter.string_of_text s
+        )
   end
 ;;
 
