@@ -146,6 +146,7 @@ class dot =
 
 let width = ref 600;;
 let height = ref 300;;
+let dot_options = ref ""
 
 let () = Odoc_args.add_option
   ("-width", Arg.Int (fun n -> width := n),
@@ -154,6 +155,11 @@ let () = Odoc_args.add_option
 let () = Odoc_args.add_option
   ("-height", Arg.Int (fun n -> height := n),
   "<n> set height for module graph on index page")
+;;
+
+let () = Odoc_args.add_option
+  ("-dot-options", Arg.Set_string dot_options,
+  "<s> set additional dot command-line options (see graphviz documentation)")
 ;;
 
 module Generator (G : Odoc_html.Html_generator) =
@@ -189,9 +195,10 @@ struct
       let dot = self#gen_dot ~width ~height modules in
       let size = (width, height) in
       let options =
-          Printf.sprintf "-Gsize=%f,%f -Grotate=0"
+          Printf.sprintf "-Gsize=%f,%f -Grotate=0 %s"
             (float width /. default_dot_ppi)
             (float height /. default_dot_ppi)
+            !dot_options
       in
       let svg = dot_to_svg ~options ~size dot in
       (*Sys.remove dot_file;*)
