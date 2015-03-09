@@ -34,7 +34,7 @@ OCAMLC=ocamlc
 OCAMLDOC=ocamldoc
 OCAMLDOCOPT=ocamldoc.opt
 
-COMPFLAGS=-annot -I +ocamldoc `ocamlfind query -i-format dot`
+COMPFLAGS=-annot -I +ocamldoc `ocamlfind query -i-format dot` -safe-string
 
 all: byte opt
 
