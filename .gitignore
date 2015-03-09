@@ -1,0 +1,6 @@
+*.cm*
+*.o
+*.a
+*.annot
+test/ocamldoc
+
