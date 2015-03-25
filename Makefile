@@ -54,8 +54,8 @@ odoc_depgraph.cmx: odoc_depgraph.ml
 	$(OCAMLOPT) -c $(COMPFLAGS) $<
 
 install:byte opt
-	mkdir -p `ocamldoc -customdir`
-	cp -f $(CMA) $(CMXS) `ocamldoc -customdir`/
+	mkdir -p `$(OCAMLFIND) ocamldoc -customdir`
+	cp -f $(CMA) $(CMXS) `$(OCAMLFIND) ocamldoc -customdir`/
 
 test: dummy
 	mkdir -p test/ocamldoc
