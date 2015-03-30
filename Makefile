@@ -57,6 +57,13 @@ install:byte opt
 	mkdir -p `$(OCAMLFIND) ocamldoc -customdir`
 	cp -f $(CMA) $(CMXS) `$(OCAMLFIND) ocamldoc -customdir`/
 
+findlib-install: byte opt
+	$(OCAMLFIND) install odoc-depgraph META LICENSE \
+		$(CMA) $(CMXS) $(CMXS:.cmxs=.o)
+
+findlib-uninstall: byte opt
+	$(OCAMLFIND) remove odoc-depgraph
+
 test: dummy
 	mkdir -p test/ocamldoc
 	(cd test ; ocamlc -c m3.ml m2.ml m4.ml m1.ml ; \
@@ -67,9 +74,6 @@ test2: dummy
 	mkdir -p test/ocamldoc
 	(cd test ; ocamlc -c m3.ml m2.ml m4.ml m1.ml ; \
 	$(OCAMLDOCOPT) -intro ../intro.text -t "Odoc_depgraph test" -g ../$(CMXS) -d ocamldoc *.ml)
-
-testopt:
-	$(OCAMLDOCOPT) -t "Kmedian test doc" -g $(CMXS) -d /tmp/ -I ../kmedian ../kmedian/*.ml
 
 clean:
 	rm -f *.cm* *.annot *.o *.a

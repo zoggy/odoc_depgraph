@@ -1,0 +1,6 @@
+version = "1.0"
+description = "Add clickable dependency graphs in ocamldoc-generated documentation"
+requires = ""
+archive(byte,plugin) = "odoc_depgraph.cma"
+archive(native,plugin) = "odoc_depgraph.cmxs"
+
